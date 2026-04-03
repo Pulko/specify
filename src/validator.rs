@@ -1,4 +1,4 @@
-//! Deterministic spec validation (YAML shape and required fields).
+//! Validate a spec against the project template (dynamic contract).
 
 use serde_yaml::Value;
 
@@ -7,165 +7,217 @@ pub struct CheckOutcome {
     pub issues: Vec<String>,
 }
 
-pub fn validate_spec_yaml(
-    yaml: &Value,
-    required_fields: &[String],
-) -> CheckOutcome {
+/// Spec must be a mapping at the root. Every key (recursively) that appears in the template must
+/// be present in the spec with compatible shape. Extra keys in the spec are allowed.
+pub fn validate_spec_against_template(spec: &Value, template: &Value) -> CheckOutcome {
     let mut issues = Vec::new();
+    let t = peel(template);
+    let s = peel(spec);
 
-    for key in required_fields {
-        match key.as_str() {
-            "purpose" => {
-                if !non_empty_string(yaml.get("purpose")) {
-                    issues.push("purpose: must be a non-empty string".to_string());
-                }
-            }
-            "requirements" => {
-                if !non_empty_string_list(yaml.get("requirements")) {
-                    issues.push(
-                        "requirements: must be a non-empty list of strings".to_string(),
-                    );
-                }
-            }
-            "scenarios" => {
-                validate_scenarios(yaml.get("scenarios"), &mut issues);
-            }
-            other => {
-                if !generic_non_empty(yaml.get(other)) {
-                    issues.push(format!("{other}: required field missing or empty"));
-                }
-            }
-        }
+    if !t.is_mapping() {
+        issues.push("template root must be a YAML mapping (object)".to_string());
+        return CheckOutcome {
+            ok: false,
+            issues,
+        };
     }
 
+    if !s.is_mapping() {
+        issues.push("spec root must be a YAML mapping (object)".to_string());
+        return CheckOutcome {
+            ok: false,
+            issues,
+        };
+    }
+
+    issues.extend(validate_value(s, t, ""));
     CheckOutcome {
         ok: issues.is_empty(),
         issues,
     }
 }
 
-fn generic_non_empty(v: Option<&Value>) -> bool {
+fn peel(v: &Value) -> &Value {
     match v {
-        None => false,
-        Some(Value::Null) => false,
-        Some(Value::String(s)) => !s.trim().is_empty(),
-        Some(Value::Sequence(seq)) => !seq.is_empty(),
-        Some(Value::Mapping(m)) => !m.is_empty(),
-        Some(_) => true,
+        Value::Tagged(t) => peel(&t.value),
+        x => x,
     }
 }
 
-fn non_empty_string(v: Option<&Value>) -> bool {
-    match v {
-        Some(Value::String(s)) => !s.trim().is_empty(),
-        _ => false,
-    }
+fn key_name(k: &Value) -> String {
+    k.as_str()
+        .map(String::from)
+        .unwrap_or_else(|| format!("{k:?}"))
 }
 
-fn non_empty_string_list(v: Option<&Value>) -> bool {
-    match v {
-        Some(Value::Sequence(seq)) => {
-            !seq.is_empty()
-                && seq.iter().all(|item| {
-                    matches!(item, Value::String(s) if !s.trim().is_empty())
-                })
-        }
-        _ => false,
-    }
-}
+fn validate_value(spec: &Value, tmpl: &Value, path: &str) -> Vec<String> {
+    let spec = peel(spec);
+    let tmpl = peel(tmpl);
+    let mut issues = Vec::new();
 
-fn validate_scenarios(v: Option<&Value>, issues: &mut Vec<String>) {
-    let Some(Value::Sequence(seq)) = v else {
-        issues.push("scenarios: must be a non-empty list".to_string());
-        return;
-    };
-    if seq.is_empty() {
-        issues.push("scenarios: must be a non-empty list".to_string());
-        return;
-    }
-    for (i, item) in seq.iter().enumerate() {
-        let Some(map) = item.as_mapping() else {
-            issues.push(format!("scenarios[{i}]: must be a mapping"));
-            continue;
-        };
-        for key in ["name", "given", "when", "then"] {
-            let ok = mapping_str(map, key).is_some_and(|s| !s.trim().is_empty());
-            if !ok {
+    match tmpl {
+        Value::Mapping(tm) => {
+            let Some(sm) = spec.as_mapping() else {
                 issues.push(format!(
-                    "scenarios[{i}]: missing or empty string for `{key}`"
+                    "{path}: expected mapping (object) to match template"
+                ));
+                return issues;
+            };
+            for (k, tv) in tm {
+                let name = key_name(k);
+                let child = if path.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{path}.{name}")
+                };
+                let sv = sm.get(k);
+                if sv.is_none() {
+                    issues.push(format!("{child}: missing (required by template)"));
+                    continue;
+                }
+                issues.extend(validate_value(sv.unwrap(), tv, &child));
+            }
+        }
+        Value::Sequence(ts) => {
+            if ts.is_empty() {
+                if spec.as_sequence().is_none() {
+                    issues.push(format!("{path}: expected sequence (list) to match template"));
+                }
+                return issues;
+            }
+            let Some(ss) = spec.as_sequence() else {
+                issues.push(format!(
+                    "{path}: expected non-empty sequence (list) to match template"
+                ));
+                return issues;
+            };
+            if ss.is_empty() {
+                issues.push(format!(
+                    "{path}: list must be non-empty (template defines at least one item)"
+                ));
+                return issues;
+            }
+            let proto = peel(&ts[0]);
+            for (i, item) in ss.iter().enumerate() {
+                let p = format!("{path}[{i}]");
+                issues.extend(validate_value(item, proto, &p));
+            }
+        }
+        Value::String(_) => {
+            let Some(s) = spec.as_str() else {
+                issues.push(format!("{path}: expected string to match template"));
+                return issues;
+            };
+            if s.trim().is_empty() {
+                issues.push(format!(
+                    "{path}: must be a non-empty string (per template shape)"
                 ));
             }
         }
+        Value::Bool(_) => {
+            if spec.as_bool().is_none() {
+                issues.push(format!("{path}: expected boolean to match template"));
+            }
+        }
+        Value::Number(_) => {
+            if !matches!(spec, Value::Number(_)) {
+                issues.push(format!("{path}: expected number to match template"));
+            }
+        }
+        Value::Null => {
+            if !spec.is_null() {
+                issues.push(format!("{path}: expected null to match template"));
+            }
+        }
+        Value::Tagged(_) => unreachable!("peel() removes tagged wrapper"),
     }
-}
 
-fn mapping_str<'a>(map: &'a serde_yaml::Mapping, key: &str) -> Option<&'a str> {
-    map.iter()
-        .find(|(k, _)| k.as_str() == Some(key))
-        .and_then(|(_, v)| v.as_str())
+    issues
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn req() -> Vec<String> {
-        vec![
-            "purpose".to_string(),
-            "requirements".to_string(),
-            "scenarios".to_string(),
-        ]
+    fn parse(s: &str) -> Value {
+        serde_yaml::from_str(s).unwrap()
     }
 
     #[test]
-    fn valid_minimal_spec() {
-        let y = serde_yaml::from_str::<Value>(
+    fn spec_matches_template() {
+        let tmpl = parse(
             r"
-purpose: Does something
+purpose: x
 requirements:
-  - Must work
+  - x
 scenarios:
-  - name: Happy
-    given: Setup
-    when: Action
-    then: Outcome
+  - name: x
+    given: x
+    when: x
+    then: x
 ",
-        )
-        .unwrap();
-        let o = validate_spec_yaml(&y, &req());
-        assert!(o.ok, "{:?}", o.issues);
-    }
-
-    #[test]
-    fn missing_purpose() {
-        let y = serde_yaml::from_str::<Value>(
+        );
+        let spec = parse(
             r"
+purpose: ok
 requirements:
-  - a
+  - r1
 scenarios:
   - name: n
     given: g
     when: w
     then: t
+extra_field: allowed
 ",
-        )
-        .unwrap();
-        let o = validate_spec_yaml(&y, &req());
+        );
+        let o = validate_spec_against_template(&spec, &tmpl);
+        assert!(o.ok, "{:?}", o.issues);
+    }
+
+    #[test]
+    fn missing_top_level_key() {
+        let tmpl = parse("a: x\nb: y\n");
+        let spec = parse("a: ok\n");
+        let o = validate_spec_against_template(&spec, &tmpl);
+        assert!(!o.ok);
+        assert!(o.issues.iter().any(|i| i.contains("b")));
+    }
+
+    #[test]
+    fn empty_string_fails() {
+        let tmpl = parse("title: placeholder\n");
+        let spec = parse("title: \"\"\n");
+        let o = validate_spec_against_template(&spec, &tmpl);
         assert!(!o.ok);
     }
 
     #[test]
-    fn empty_scenarios() {
-        let y = serde_yaml::from_str::<Value>(
+    fn empty_template_list_allows_empty_spec_list() {
+        let tmpl = parse("items: []\n");
+        let spec = parse("items: []\n");
+        let o = validate_spec_against_template(&spec, &tmpl);
+        assert!(o.ok, "{:?}", o.issues);
+    }
+
+    #[test]
+    fn nested_sequence_uses_first_item_as_shape() {
+        let tmpl = parse(
             r"
-purpose: p
-requirements:
-  - r
-scenarios: []
+scenarios:
+  - name: x
+    step: x
 ",
-        )
-        .unwrap();
-        let o = validate_spec_yaml(&y, &req());
-        assert!(!o.ok);
+        );
+        let spec = parse(
+            r"
+scenarios:
+  - name: a
+    step: b
+  - name: c
+    step: d
+",
+        );
+        let o = validate_spec_against_template(&spec, &tmpl);
+        assert!(o.ok, "{:?}", o.issues);
     }
 }

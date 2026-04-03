@@ -4,9 +4,27 @@ use std::path::PathBuf;
 
 use crate::commands::{check, generate, init, sync};
 
+const AFTER_HELP: &str = "\
+Project root is the current working directory — run commands from the repo root.
+
+Config: .specify/config.yaml  |  Template contract: .specify/templates/<template>.yaml
+The `check` command validates that each spec matches the template shape (keys, nesting, lists).
+Extra keys in a spec are allowed; anything present in the template must be satisfied.
+
+Distribution: install with Cargo from a Git URL (see README.md), e.g.:
+  cargo install --git https://github.com/<org>/specify
+";
+
 #[derive(Parser)]
 #[command(name = "specify")]
-#[command(about = "Generate and maintain LLM-friendly spec files beside source code.", long_about = None)]
+#[command(
+    version,
+    about = "LLM-friendly YAML specs beside source code (template-driven validation).",
+    long_about = "Specify writes and checks sibling spec files next to source. \
+`init` sets up .specify/ and Cursor integration. `generate` copies the template once. \
+`check` ensures the spec matches the template file. `sync` audits existing specs vs include/exclude globs."
+)]
+#[command(after_help = AFTER_HELP)]
 pub struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -14,24 +32,24 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Create .specify/, default config and template, and Cursor rule/commands
+    /// Write .specify/config.yaml, templates/default.yaml, and Cursor rule/commands (overwrites)
     Init,
-    /// Create a spec skeleton next to a source file from the template (does not overwrite)
+    /// Create spec skeleton from template next to source (never overwrites an existing spec)
     Generate {
-        /// Path to the source file (relative to current directory or absolute)
+        /// Source file path (relative to cwd or absolute)
         file: PathBuf,
     },
-    /// Report whether each existing spec is in sync with config (include/exclude and paired source)
+    /// List each *spec_extension file: paired source must match include/exclude (no files created)
     Sync {
-        /// Emit JSON report
+        /// Print JSON { results: [{ path, status, reasons }] }
         #[arg(long)]
         json: bool,
     },
-    /// Validate spec YAML and required fields for a source file
+    /// Valid YAML, non-empty spec, and structure matches .specify/templates/<template>.yaml
     Check {
-        /// Path to the source file
+        /// Source file path (spec path is derived from config)
         file: PathBuf,
-        /// Emit JSON result
+        /// Print JSON { ok, issues }
         #[arg(long)]
         json: bool,
     },

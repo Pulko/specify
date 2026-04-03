@@ -31,14 +31,6 @@ fn default_exclude() -> Vec<String> {
     ]
 }
 
-fn default_required_fields() -> Vec<String> {
-    vec![
-        "purpose".to_string(),
-        "requirements".to_string(),
-        "scenarios".to_string(),
-    ]
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default = "default_spec_extension")]
@@ -49,8 +41,6 @@ pub struct Config {
     pub exclude: Vec<String>,
     #[serde(default = "default_template")]
     pub template: String,
-    #[serde(default = "default_required_fields")]
-    pub required_fields: Vec<String>,
 }
 
 impl Default for Config {
@@ -60,7 +50,6 @@ impl Default for Config {
             include: default_include(),
             exclude: default_exclude(),
             template: default_template(),
-            required_fields: default_required_fields(),
         }
     }
 }

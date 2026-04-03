@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 
 use crate::config::Config;
 use crate::filesystem::{project_root, spec_path_for_source};
-use crate::validator::validate_spec_yaml;
+use crate::generator::read_template;
+use crate::validator::validate_spec_against_template;
 
 #[derive(Serialize)]
 struct CheckJson {
@@ -55,7 +56,16 @@ pub fn run(source_arg: &Path, json: bool) -> Result<bool> {
         }
     };
 
-    let outcome = validate_spec_yaml(&value, &config.required_fields);
+    let template_raw = read_template(&root, &config)?;
+    let template: serde_yaml::Value = match serde_yaml::from_str(&template_raw) {
+        Ok(v) => v,
+        Err(e) => {
+            issues.push(format!("invalid template YAML: {e}"));
+            return finish(json, false, issues);
+        }
+    };
+
+    let outcome = validate_spec_against_template(&value, &template);
     issues.extend(outcome.issues);
 
     let ok = issues.is_empty();
