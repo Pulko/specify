@@ -1,6 +1,6 @@
 [package]
 name = "specify"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "CLI for YAML spec files beside source code (template-driven check)"
 readme = "README.md"

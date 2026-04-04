@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            suffix: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            suffix: zip
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            suffix: tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Strip binary (Unix)
+        if: runner.os != 'Windows'
+        run: strip target/release/specify
+
+      - name: Package archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          STEM="specify-v${VERSION}-${{ matrix.target }}"
+          mkdir -p "pack/$STEM"
+          BIN="target/release/specify"
+          if [[ "${{ runner.os }}" == "Windows" ]]; then BIN="$BIN.exe"; fi
+          cp "$BIN" "pack/$STEM/"
+          cd pack
+          if [[ "${{ matrix.suffix }}" == "zip" ]]; then
+            tar -a -c -f "../${STEM}.zip" "$STEM"
+          else
+            tar czf "../${STEM}.tar.gz" "$STEM"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: specify-v*.*
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          pattern: binary-*
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          generate_release_notes: true
