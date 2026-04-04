@@ -16,18 +16,12 @@ pub fn validate_spec_against_template(spec: &Value, template: &Value) -> CheckOu
 
     if !t.is_mapping() {
         issues.push("template root must be a YAML mapping (object)".to_string());
-        return CheckOutcome {
-            ok: false,
-            issues,
-        };
+        return CheckOutcome { ok: false, issues };
     }
 
     if !s.is_mapping() {
         issues.push("spec root must be a YAML mapping (object)".to_string());
-        return CheckOutcome {
-            ok: false,
-            issues,
-        };
+        return CheckOutcome { ok: false, issues };
     }
 
     issues.extend(validate_value(s, t, ""));
@@ -81,7 +75,9 @@ fn validate_value(spec: &Value, tmpl: &Value, path: &str) -> Vec<String> {
         Value::Sequence(ts) => {
             if ts.is_empty() {
                 if spec.as_sequence().is_none() {
-                    issues.push(format!("{path}: expected sequence (list) to match template"));
+                    issues.push(format!(
+                        "{path}: expected sequence (list) to match template"
+                    ));
                 }
                 return issues;
             }

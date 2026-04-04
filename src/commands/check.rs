@@ -1,11 +1,11 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::config::Config;
 use crate::filesystem::{project_root, spec_path_for_source};
-use crate::generator::read_template;
+use crate::paths::template_file;
+use crate::spec_meta::split_spec_root;
 use crate::validator::validate_spec_against_template;
 
 #[derive(Serialize)]
@@ -16,7 +16,6 @@ struct CheckJson {
 
 pub fn run(source_arg: &Path, json: bool) -> Result<bool> {
     let root = project_root();
-    let config = Config::load(&root).context("run `specify init` to create .specify/config.yaml")?;
 
     let source = resolve_source_path(&root, source_arg)?;
     if !source.is_file() {
@@ -56,16 +55,36 @@ pub fn run(source_arg: &Path, json: bool) -> Result<bool> {
         }
     };
 
-    let template_raw = read_template(&root, &config)?;
-    let template: serde_yaml::Value = match serde_yaml::from_str(&template_raw) {
-        Ok(v) => v,
+    let (template_name, spec_body) = match split_spec_root(&value) {
+        Ok(pair) => pair,
         Err(e) => {
-            issues.push(format!("invalid template YAML: {e}"));
+            issues.push(e.to_string());
             return finish(json, false, issues);
         }
     };
 
-    let outcome = validate_spec_against_template(&value, &template);
+    let template_path = template_file(&root, &template_name);
+    let template_raw = match fs::read_to_string(&template_path) {
+        Ok(s) => s,
+        Err(e) => {
+            issues.push(format!(
+                "cannot read template `{}` ({}): {e}",
+                template_path.display(),
+                template_name
+            ));
+            return finish(json, false, issues);
+        }
+    };
+
+    let template: serde_yaml::Value = match serde_yaml::from_str(&template_raw) {
+        Ok(v) => v,
+        Err(e) => {
+            issues.push(format!("invalid template YAML ({}): {e}", template_name));
+            return finish(json, false, issues);
+        }
+    };
+
+    let outcome = validate_spec_against_template(&spec_body, &template);
     issues.extend(outcome.issues);
 
     let ok = issues.is_empty();

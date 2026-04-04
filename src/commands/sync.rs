@@ -1,12 +1,30 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-use crate::config::Config;
 use crate::filesystem::{project_root, source_stem_from_spec_basename, SPEC_EXTENSION};
+
+/// Default globs for `sync` when no project config file is used (built into the binary).
+fn default_include_patterns() -> Vec<String> {
+    vec![
+        "**/*.ts".to_string(),
+        "**/*.tsx".to_string(),
+        "**/*.js".to_string(),
+        "**/*.jsx".to_string(),
+    ]
+}
+
+fn default_exclude_patterns() -> Vec<String> {
+    vec![
+        "**/node_modules/**".to_string(),
+        "**/target/**".to_string(),
+        "**/.git/**".to_string(),
+        "**/.specify/**".to_string(),
+    ]
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SpecSyncStatus {
@@ -39,10 +57,9 @@ pub fn run(json: bool) -> Result<bool> {
 
 pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
     let root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-    let config = Config::load(&root).context("run `specify init` to create .specify/config.yaml")?;
 
-    let include = build_glob_set(&config.include)?;
-    let exclude = build_glob_set(&config.exclude)?;
+    let include = build_glob_set(&default_include_patterns())?;
+    let exclude = build_glob_set(&default_exclude_patterns())?;
 
     let mut records = Vec::new();
 
@@ -182,15 +199,18 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
         });
     }
 
-    let all_ok = records
-        .iter()
-        .all(|r| r.status == SpecSyncStatus::InSync);
+    let all_ok = records.iter().all(|r| r.status == SpecSyncStatus::InSync);
 
     if json {
         let results: Vec<SyncRecordJson> = records
             .iter()
             .map(|r| SyncRecordJson {
-                path: r.spec_path.strip_prefix(&root).unwrap_or(&r.spec_path).to_string_lossy().replace('\\', "/"),
+                path: r
+                    .spec_path
+                    .strip_prefix(&root)
+                    .unwrap_or(&r.spec_path)
+                    .to_string_lossy()
+                    .replace('\\', "/"),
                 status: match r.status {
                     SpecSyncStatus::InSync => "in_sync".to_string(),
                     SpecSyncStatus::OutOfSync => "out_of_sync".to_string(),
@@ -205,11 +225,7 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
             match r.status {
                 SpecSyncStatus::InSync => println!("in_sync  {}", rel.display()),
                 SpecSyncStatus::OutOfSync => {
-                    println!(
-                        "out_of_sync  {}  [{}]",
-                        rel.display(),
-                        r.reasons.join(", ")
-                    );
+                    println!("out_of_sync  {}  [{}]", rel.display(), r.reasons.join(", "));
                 }
             }
         }
@@ -235,11 +251,10 @@ fn normalize_rel(path: &Path, root: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
 
     fn write_minimal_project(root: &Path) {
         fs::create_dir_all(root.join(".specify/templates")).unwrap();
-        fs::write(root.join(".specify/config.yaml"), Config::default_yaml()).unwrap();
+        fs::write(root.join(".specify/templates/default.yaml"), "k: v\n").unwrap();
     }
 
     #[test]
@@ -249,7 +264,11 @@ mod tests {
         write_minimal_project(root);
         fs::create_dir_all(root.join("lib")).unwrap();
         fs::write(root.join("lib/a.ts"), "//").unwrap();
-        fs::write(root.join("lib/a.spec.yaml"), "k: v").unwrap();
+        fs::write(
+            root.join("lib/a.spec.yaml"),
+            "specify_template: default\nk: v\n",
+        )
+        .unwrap();
         assert!(run_with_root(root, false).unwrap());
     }
 
@@ -282,7 +301,7 @@ mod tests {
         write_minimal_project(root);
         fs::create_dir_all(root.join("py")).unwrap();
         fs::write(root.join("py/m.py"), "x").unwrap();
-        fs::write(root.join("py/m.spec.yaml"), "").unwrap();
+        fs::write(root.join("py/m.spec.yaml"), "specify_template: default\n").unwrap();
         assert!(!run_with_root(root, false).unwrap());
     }
 }

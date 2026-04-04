@@ -1,8 +1,9 @@
 pub mod cli;
 pub mod commands;
-pub mod config;
 pub mod filesystem;
 pub mod generator;
+pub mod paths;
+pub mod spec_meta;
 pub mod validator;
 
 use anyhow::Result;

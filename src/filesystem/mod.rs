@@ -13,7 +13,10 @@ pub fn project_root() -> PathBuf {
 /// `source.ext` → `source` + [`SPEC_EXTENSION`] (e.g. `widget.ts` → `widget.spec.yaml`).
 pub fn spec_path_for_source(source: &Path) -> PathBuf {
     let dir = source.parent().unwrap_or_else(|| Path::new("."));
-    let stem = source.file_stem().map(|s| s.to_string_lossy()).unwrap_or_default();
+    let stem = source
+        .file_stem()
+        .map(|s| s.to_string_lossy())
+        .unwrap_or_default();
     dir.join(format!("{stem}{SPEC_EXTENSION}"))
 }
 

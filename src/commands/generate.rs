@@ -1,14 +1,12 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::config::Config;
 use crate::filesystem::{project_root, spec_path_for_source};
 use crate::generator::{read_template, write_spec_skeleton};
 
-pub fn run(source_arg: &Path) -> Result<()> {
+pub fn run(source_arg: &Path, template_name: &str) -> Result<()> {
     let root = project_root();
-    let config = Config::load(&root).context("run `specify init` to create .specify/config.yaml")?;
 
     let source = resolve_source_path(&root, source_arg)?;
     if !source.is_file() {
@@ -21,8 +19,8 @@ pub fn run(source_arg: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let template = read_template(&root, &config)?;
-    write_spec_skeleton(&spec_path, &template)?;
+    let template = read_template(&root, template_name)?;
+    write_spec_skeleton(&spec_path, template_name, &template)?;
     println!("wrote {}", spec_path.display());
     Ok(())
 }

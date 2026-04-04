@@ -1,15 +1,13 @@
 use anyhow::{Context, Result};
 use std::fs;
 
-use crate::config::Config;
 use crate::filesystem::project_root;
+use crate::paths::templates_dir;
 
 const DEFAULT_TEMPLATE: &str = r#"# Spec template — customize in .specify/templates/default.yaml
 purpose: "TODO: one line describing why this module exists"
 requirements:
   - "TODO: replace with real requirements"
-inputs: []
-outputs: []
 side_effects: []
 dependencies: []
 scenarios:
@@ -55,17 +53,19 @@ Do **not** treat the spec as optional flavor text. If it exists, it is the **pri
 
 ## When modifying code
 
-- Keep spec and behavior aligned; update the spec when you change observable behavior or public API.
+- If a **paired spec exists** for a source file you change, **update that spec in the same turn** (or before you stop) so it matches the code: observable behavior, public API, errors, and any other claims your template captures. **Do not** leave the paired spec stale after behavior-affecting edits unless the user explicitly asked to touch code only.
+- If no paired spec exists yet, follow **When the spec is missing** when adding or substantially editing that source.
 
 ## Validation
 
-- **Structure:** `specify check <path-to-source>` (vs `.specify/templates/<template>.yaml`).
+- **Structure:** `specify check <path-to-source>` (spec root must declare `specify_template`; shape vs `.specify/templates/<name>.yaml`).
 - **Accuracy:** `/spec-check` after substantive changes.
 "#;
 
-const CURSOR_CMD_SPEC_GENERATE: &str = r#"# /spec-generate
-
-## Preconditions
+/// Shared body for `/spec-generate` and the Cursor skill (`concat!` requires literals).
+macro_rules! spec_generate_procedure {
+    () => {
+        r#"## Preconditions
 
 - The **spec file must already exist** (skeleton). If it is missing, run:
 
@@ -79,12 +79,11 @@ const CURSOR_CMD_SPEC_GENERATE: &str = r#"# /spec-generate
 
 ## Task
 
-1. Read **`.specify/config.yaml`** for **`template`** only (which file under `.specify/templates/` defines the contract).
-2. Read **`.specify/templates/<template>.yaml`** (structural contract: keys, nesting, list shapes).
-3. Read the **paired spec** first: same directory as the source, `<source_stem>.spec.yaml`.
-4. Read the **source** file only after the spec (and template) are loaded.
-5. **Replace placeholders** so the spec describes intent, constraints, and observable behavior — not implementation dumps.
-6. For **list-of-object** sections, use the **sub-keys shown in the template’s first list item** for every item.
+1. Read the **paired spec** first: same directory as the source, `<source_stem>.spec.yaml`. At the root, read **`specify_template`** (non-empty string; put it **first** in the file when authoring). That names **`.specify/templates/<specify_template>.yaml`**.
+2. Read **`.specify/templates/<specify_template>.yaml`** (structural contract: keys, nesting, list shapes). Template files do **not** contain `specify_template`.
+3. Read the **source** file only after the spec (and template) are loaded.
+4. **Replace placeholders** so the spec describes intent, constraints, and observable behavior — not implementation dumps. **Preserve** `specify_template` and keep it accurate if the spec should use a different template file.
+5. For **list-of-object** sections, use the **sub-keys shown in the template’s first list item** for every item.
 
 ## Output
 
@@ -92,8 +91,55 @@ const CURSOR_CMD_SPEC_GENERATE: &str = r#"# /spec-generate
 
 ## Quality bar
 
-- Run `specify check <path-to-source>` after editing; if it fails, fix structure before finishing (check compares the spec to the template file).
-"#;
+- Run `specify check <path-to-source>` after editing; if it fails, fix structure before finishing (check uses `specify_template` to pick the template file).
+"#
+    };
+}
+
+const CURSOR_CMD_SPEC_GENERATE: &str = concat!("# /spec-generate\n\n", spec_generate_procedure!());
+
+const CURSOR_SKILL_SPECIFY: &str = concat!(
+    r#"---
+name: specify
+description: >-
+  Use when creating, filling in, or refreshing paired `.spec.yaml` files; when code was
+  edited and a paired spec exists for that source path (eliminate drift — update the spec
+  in the same task); or when aligning specs with `.specify/templates/`. For Specify projects
+  (`dir/name.spec.yaml` beside `dir/name.ext`).
+---
+
+# Specify — authoring paired specs
+
+This project keeps **LLM-oriented YAML specs** beside sources: for `dir/name.ext`, the paired spec is **`dir/name.spec.yaml`**.
+
+**Project rule** (if present): read an existing paired spec **before** the source when explaining or changing behavior. This skill focuses on **writing or updating** that spec from the template contract.
+
+## No spec drift (mandatory)
+
+When you **change** a source file (edits, refactors, new behavior, API changes) and its paired **`<stem>.spec.yaml` already exists**:
+
+1. **Update the spec in the same task** before you finish — treating it as part of the change, not optional follow-up.
+2. Bring **purpose, requirements, scenarios, inputs/outputs, side effects, dependencies**, and any other template sections in line with **what the code does now** (observable behavior and public contracts — not a line-by-line mirror of implementation).
+3. Run **`specify check <path-to-source>`** after editing the spec; fix structural mismatches before stopping.
+
+**Do not** stop with a stale paired spec after behavior-affecting code edits unless the user **explicitly** asked to skip spec updates.
+
+**CLI:** `specify generate <path-to-source>` (optional `--template <name>`, default `default`) creates the skeleton when the spec is missing; then use the procedure below (same as `/spec-generate`).
+
+"#,
+    spec_generate_procedure!(),
+    r#"
+
+## After substantive edits
+
+- Re-read spec vs code yourself or use **`/spec-check`** for a focused audit; if you find drift, **edit the spec** (or the code, if the spec was correct) — reporting alone is not enough when you are the one who introduced the change.
+
+## Slash commands (equivalent entry points)
+
+- **`/spec-generate`** — same procedure as above.
+- **`/spec-check`** — audit spec vs implementation without applying fixes unless asked.
+"#
+);
 
 const CURSOR_CMD_SPEC_CHECK: &str = r#"# /spec-check
 
@@ -103,11 +149,9 @@ const CURSOR_CMD_SPEC_CHECK: &str = r#"# /spec-check
 
 ## Task
 
-1. Read **`.specify/config.yaml`** for **`template`** (template file name under `.specify/templates/`).
-2. Read the **paired spec** (`<source_stem>.spec.yaml` next to the source) in full **before** re-reading the source — anchor your expectations in the spec first.
+1. Read the **paired spec** (`<source_stem>.spec.yaml` next to the source) in full **before** re-reading the source — note root **`specify_template`** (which `.specify/templates/<name>.yaml` defines structure).
+2. Read **`.specify/templates/<specify_template>.yaml`** as the structural contract (`specify check` enforces shape; you judge behavior).
 3. Read the **source** and compare to the spec.
-
-Use **`.specify/templates/<template>.yaml`** as the structural contract (`specify check` enforces shape; you judge behavior).
 
 Compare what the **spec claims** to what the **code actually does**. Report:
 
@@ -131,26 +175,20 @@ Numbered list of issues with the fields above. No preamble essay.
 
 pub fn run() -> Result<()> {
     let root = project_root();
-    let specify_dir = Config::specify_dir(&root);
-    let templates_dir = specify_dir.join("templates");
-    fs::create_dir_all(&templates_dir)?;
+    let templates = templates_dir(&root);
+    fs::create_dir_all(&templates)?;
 
-    let config_path = Config::config_path(&root);
-    fs::write(&config_path, Config::default_yaml()).with_context(|| {
-        format!("failed to write {}", config_path.display())
-    })?;
-    println!("wrote {}", config_path.display());
-
-    let template_path = templates_dir.join("default.yaml");
-    fs::write(&template_path, DEFAULT_TEMPLATE).with_context(|| {
-        format!("failed to write {}", template_path.display())
-    })?;
+    let template_path = templates.join("default.yaml");
+    fs::write(&template_path, DEFAULT_TEMPLATE)
+        .with_context(|| format!("failed to write {}", template_path.display()))?;
     println!("wrote {}", template_path.display());
 
     let cursor_rules = root.join(".cursor").join("rules");
     let cursor_cmds = root.join(".cursor").join("commands");
+    let cursor_skill_dir = root.join(".cursor").join("skills").join("specify");
     fs::create_dir_all(&cursor_rules)?;
     fs::create_dir_all(&cursor_cmds)?;
+    fs::create_dir_all(&cursor_skill_dir)?;
 
     let rule_path = cursor_rules.join("specify.mdc");
     fs::write(&rule_path, CURSOR_RULE_SPECIFY)
@@ -166,6 +204,11 @@ pub fn run() -> Result<()> {
     fs::write(&chk_path, CURSOR_CMD_SPEC_CHECK)
         .with_context(|| format!("failed to write {}", chk_path.display()))?;
     println!("wrote {}", chk_path.display());
+
+    let skill_path = cursor_skill_dir.join("SKILL.md");
+    fs::write(&skill_path, CURSOR_SKILL_SPECIFY)
+        .with_context(|| format!("failed to write {}", skill_path.display()))?;
+    println!("wrote {}", skill_path.display());
 
     Ok(())
 }
