@@ -21,32 +21,46 @@ notes: ""
 "#;
 
 const CURSOR_RULE_SPECIFY: &str = r#"---
-description: Spec-first reading and Specify workflow
+description: Mandatory spec-before-source when a paired spec exists (Specify)
 alwaysApply: true
 ---
 
-# Specify (spec files)
+# Specify — read paired specs first
 
-For each source file, a sibling spec may exist in the same directory: `<source_stem>` + `spec_extension` from `.specify/config.yaml` (often `.spec.yaml`).
+This project keeps **LLM-oriented YAML specs** next to sources. Your default workflow is **textual context first**, implementation second.
 
-## When reading code
+## Paired spec path
 
-1. Resolve the paired spec for the source file (basename + `spec_extension` from `.specify/config.yaml`).
-2. **Prefer reading the spec** for intent, behavior, and constraints.
-3. Read the **source** only if the spec is missing, insufficient, or deeper implementation detail is required.
+For a source file `dir/name.ext`, the paired spec is always **`dir/name.spec.yaml`** (same directory, source stem + `.spec.yaml`).
+
+## Mandatory read order (when the spec file exists)
+
+If that paired spec path **exists on disk**:
+
+1. **Read the spec first** in this turn — before reading the paired source for intent, behavior, API contracts, or “what does this do?”
+2. **Then** read the source only for details not stated in the spec, verification, or edits.
+
+Do **not** treat the spec as optional flavor text. If it exists, it is the **primary** context for that module unless the user explicitly asks to ignore it or only wants raw code.
+
+## Triggers — apply the order above when
+
+- The user @-mentions, opens, or names a **source** path that can have a paired spec, **or**
+- You would otherwise read implementation files to explain, review, or change behavior.
+
+**First action:** resolve the paired spec path; **if the file exists, read it before the source.**
+
+## When the spec is missing
+
+- Read the source as usual. For new files, create the paired spec (`specify generate <file>` then `/spec-generate` if helpful).
 
 ## When modifying code
 
-- Update the spec so it stays accurate. **Do not** let spec and code drift apart.
-
-## When creating new source files
-
-- Create the paired spec (run `specify generate <file>` for a template skeleton, then fill with `/spec-generate` in Cursor if needed).
+- Keep spec and behavior aligned; update the spec when you change observable behavior or public API.
 
 ## Validation
 
-- **Structural** (YAML + shape vs `.specify/templates/<template>.yaml`): run `specify check <file>` (CLI).
-- **Semantic** (spec vs actual code behavior): use the `/spec-check` Cursor command after substantive changes.
+- **Structure:** `specify check <path-to-source>` (vs `.specify/templates/<template>.yaml`).
+- **Accuracy:** `/spec-check` after substantive changes.
 "#;
 
 const CURSOR_CMD_SPEC_GENERATE: &str = r#"# /spec-generate
@@ -65,11 +79,12 @@ const CURSOR_CMD_SPEC_GENERATE: &str = r#"# /spec-generate
 
 ## Task
 
-1. Read **`.specify/config.yaml`**: note `spec_extension` and `template` (where the spec lives and which template defines the contract).
-2. Read **`.specify/templates/<template>.yaml`**. That file is the **structural contract**: the spec should keep the same keys, nesting, and list shapes. Extra top-level keys in the spec are fine; anything **in** the template is required to be present and filled meaningfully.
-3. Read the **source** file and open the **paired spec** next to it: same directory, `<source_stem>` + `spec_extension` from config.
-4. **Replace placeholders** so the spec describes intent, constraints, and observable behavior — not implementation dumps.
-5. For **list-of-object** sections, use the **sub-keys shown in the template’s first list item** for every item.
+1. Read **`.specify/config.yaml`** for **`template`** only (which file under `.specify/templates/` defines the contract).
+2. Read **`.specify/templates/<template>.yaml`** (structural contract: keys, nesting, list shapes).
+3. Read the **paired spec** first: same directory as the source, `<source_stem>.spec.yaml`.
+4. Read the **source** file only after the spec (and template) are loaded.
+5. **Replace placeholders** so the spec describes intent, constraints, and observable behavior — not implementation dumps.
+6. For **list-of-object** sections, use the **sub-keys shown in the template’s first list item** for every item.
 
 ## Output
 
@@ -88,7 +103,11 @@ const CURSOR_CMD_SPEC_CHECK: &str = r#"# /spec-check
 
 ## Task
 
-Use **`.specify/config.yaml`** and **`.specify/templates/<template>.yaml`** as the structural contract (`specify check` enforces template shape; you judge behavior).
+1. Read **`.specify/config.yaml`** for **`template`** (template file name under `.specify/templates/`).
+2. Read the **paired spec** (`<source_stem>.spec.yaml` next to the source) in full **before** re-reading the source — anchor your expectations in the spec first.
+3. Read the **source** and compare to the spec.
+
+Use **`.specify/templates/<template>.yaml`** as the structural contract (`specify check` enforces shape; you judge behavior).
 
 Compare what the **spec claims** to what the **code actually does**. Report:
 

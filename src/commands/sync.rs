@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::config::Config;
-use crate::filesystem::{project_root, source_stem_from_spec_basename};
+use crate::filesystem::{project_root, source_stem_from_spec_basename, SPEC_EXTENSION};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SpecSyncStatus {
@@ -66,7 +66,7 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        if !name.ends_with(&config.spec_extension) {
+        if !name.ends_with(SPEC_EXTENSION) {
             continue;
         }
         let Some(rel) = normalize_rel(path, &root) else {
@@ -88,7 +88,7 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
             continue;
         }
 
-        let Some(base) = source_stem_from_spec_basename(name, &config.spec_extension) else {
+        let Some(base) = source_stem_from_spec_basename(name) else {
             reasons.push("invalid_spec_basename".to_string());
             records.push(SyncRecord {
                 spec_path: path.to_path_buf(),
@@ -112,7 +112,7 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
                 let Some(fname) = p.file_name().and_then(|n| n.to_str()) else {
                     continue;
                 };
-                if fname.ends_with(&config.spec_extension) {
+                if fname.ends_with(SPEC_EXTENSION) {
                     continue;
                 }
                 let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else {

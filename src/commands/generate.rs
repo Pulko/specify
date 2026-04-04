@@ -15,7 +15,7 @@ pub fn run(source_arg: &Path) -> Result<()> {
         bail!("not a file: {}", source.display());
     }
 
-    let spec_path = spec_path_for_source(&source, &config.spec_extension);
+    let spec_path = spec_path_for_source(&source);
     if spec_path.exists() {
         println!("spec already exists: {}", spec_path.display());
         return Ok(());

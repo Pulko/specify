@@ -23,7 +23,7 @@ pub fn run(source_arg: &Path, json: bool) -> Result<bool> {
         bail!("not a file: {}", source.display());
     }
 
-    let spec_path = spec_path_for_source(&source, &config.spec_extension);
+    let spec_path = spec_path_for_source(&source);
     let mut issues = Vec::new();
 
     if !spec_path.is_file() {

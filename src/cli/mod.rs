@@ -39,7 +39,7 @@ enum Commands {
         /// Source file path (relative to cwd or absolute)
         file: PathBuf,
     },
-    /// List each *spec_extension file: paired source must match include/exclude (no files created)
+    /// List each `.spec.yaml`: paired source must match include/exclude (no files created)
     Sync {
         /// Print JSON { results: [{ path, status, reasons }] }
         #[arg(long)]

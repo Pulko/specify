@@ -52,10 +52,11 @@ Run `specify --help` and `specify <command> --help` for embedded documentation.
 
 | Field | Meaning |
 |--------|---------|
-| `spec_extension` | Suffix for spec files (default `.spec.yaml`) |
 | `template` | Name of template file under `.specify/templates/` (default `default` → `default.yaml`) |
 | `include` | Glob patterns for tracked sources (used by `sync`) |
 | `exclude` | Glob patterns to skip (used by `sync` and directory walking) |
+
+Paired spec files are always **`<source_stem>.spec.yaml`** next to the source; the suffix is not configurable. If an older `config.yaml` still has a `spec_extension` key, it is ignored.
 
 There is **no** separate required fields list: **`specify check` compares each spec to your template file**. Keys that appear in the template must appear in the spec with a compatible shape. Extra keys in the spec are ignored by `check`.
 
@@ -64,7 +65,7 @@ Edit `.specify/templates/<template>.yaml` to change the contract for new `genera
 ## Commands
 
 - **`init`** — Creates/overwrites default config, default template, and Cursor rule + command stubs.
-- **`generate <file>`** — Copies the template to `<stem><spec_extension>` if it does not exist yet.
+- **`generate <file>`** — Copies the template to `<stem>.spec.yaml` if it does not exist yet.
 - **`check <file>`** — Spec must exist, parse as YAML, be non-empty, and **match the template structure**.
 - **`sync`** — For every existing spec file, ensures a unique paired source exists and matches `include` / `exclude`. Does **not** create specs.
 

@@ -2,12 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-const DEFAULT_SPEC_EXTENSION: &str = ".spec.yaml";
 const DEFAULT_TEMPLATE: &str = "default";
-
-fn default_spec_extension() -> String {
-    DEFAULT_SPEC_EXTENSION.to_string()
-}
 
 fn default_template() -> String {
     DEFAULT_TEMPLATE.to_string()
@@ -33,8 +28,6 @@ fn default_exclude() -> Vec<String> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    #[serde(default = "default_spec_extension")]
-    pub spec_extension: String,
     #[serde(default = "default_include")]
     pub include: Vec<String>,
     #[serde(default = "default_exclude")]
@@ -46,7 +39,6 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            spec_extension: default_spec_extension(),
             include: default_include(),
             exclude: default_exclude(),
             template: default_template(),
