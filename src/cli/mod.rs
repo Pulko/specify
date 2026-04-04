@@ -22,7 +22,7 @@ Distribution: install with Cargo from a Git URL (see README.md), e.g.:
     about = "LLM-friendly YAML specs beside source code (template-driven validation).",
     long_about = "Specify writes and checks sibling spec files next to source. \
 `init` sets up .specify/templates and Cursor integration. `generate` writes a spec with `specify_template`. \
-`check` validates against the named template file. `sync` audits specs vs built-in include/exclude globs."
+`check` validates against the named template file. `sync` audits each spec for a unique same-directory source (same stem, not .spec.yaml)."
 )]
 #[command(after_help = AFTER_HELP)]
 pub struct Cli {
@@ -42,7 +42,7 @@ enum Commands {
         #[arg(long, default_value = "default")]
         template: String,
     },
-    /// List each `.spec.yaml`: paired source must match built-in include/exclude (no files created)
+    /// List each `.spec.yaml`: exactly one same-directory non-spec file must share its stem (no files created)
     Sync {
         /// Print JSON { results: [{ path, status, reasons }] }
         #[arg(long)]

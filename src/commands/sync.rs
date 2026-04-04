@@ -1,5 +1,4 @@
 use anyhow::Result;
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,23 +6,14 @@ use walkdir::WalkDir;
 
 use crate::filesystem::{project_root, source_stem_from_spec_basename, SPEC_EXTENSION};
 
-/// Default globs for `sync` when no project config file is used (built into the binary).
-fn default_include_patterns() -> Vec<String> {
-    vec![
-        "**/*.ts".to_string(),
-        "**/*.tsx".to_string(),
-        "**/*.js".to_string(),
-        "**/*.jsx".to_string(),
-    ]
-}
-
-fn default_exclude_patterns() -> Vec<String> {
-    vec![
-        "**/node_modules/**".to_string(),
-        "**/target/**".to_string(),
-        "**/.git/**".to_string(),
-        "**/.specify/**".to_string(),
-    ]
+/// Skip heavy or non-source trees when walking the project.
+fn is_skipped_rel(rel: &str) -> bool {
+    rel.split('/').any(|seg| {
+        matches!(
+            seg,
+            "node_modules" | "target" | ".git" | ".specify"
+        )
+    })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -58,9 +48,6 @@ pub fn run(json: bool) -> Result<bool> {
 pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
     let root = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
 
-    let include = build_glob_set(&default_include_patterns())?;
-    let exclude = build_glob_set(&default_exclude_patterns())?;
-
     let mut records = Vec::new();
 
     let walker = WalkDir::new(&root).into_iter().filter_entry(|e| {
@@ -71,7 +58,7 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
         if rel.is_empty() {
             return true;
         }
-        !exclude.is_match(&rel)
+        !is_skipped_rel(&rel)
     });
 
     for entry in walker {
@@ -89,13 +76,10 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
         let Some(rel) = normalize_rel(path, &root) else {
             continue;
         };
-        if rel.contains(".specify/") || rel.starts_with(".specify/") {
-            continue;
-        }
 
         let mut reasons = Vec::new();
 
-        if exclude.is_match(&rel) {
+        if is_skipped_rel(&rel) {
             reasons.push("spec_path_excluded".to_string());
             records.push(SyncRecord {
                 spec_path: path.to_path_buf(),
@@ -172,18 +156,8 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
             continue;
         };
 
-        if exclude.is_match(&src_rel) {
+        if is_skipped_rel(&src_rel) {
             reasons.push("source_excluded".to_string());
-            records.push(SyncRecord {
-                spec_path: path.to_path_buf(),
-                status: SpecSyncStatus::OutOfSync,
-                reasons,
-            });
-            continue;
-        }
-
-        if !include.is_match(&src_rel) {
-            reasons.push("source_not_included".to_string());
             records.push(SyncRecord {
                 spec_path: path.to_path_buf(),
                 status: SpecSyncStatus::OutOfSync,
@@ -232,14 +206,6 @@ pub(crate) fn run_with_root(root: &Path, json: bool) -> Result<bool> {
     }
 
     Ok(all_ok)
-}
-
-fn build_glob_set(patterns: &[String]) -> Result<GlobSet> {
-    let mut b = GlobSetBuilder::new();
-    for p in patterns {
-        b.add(Glob::new(p)?);
-    }
-    Ok(b.build()?)
 }
 
 fn normalize_rel(path: &Path, root: &Path) -> Option<String> {
@@ -295,13 +261,13 @@ mod tests {
     }
 
     #[test]
-    fn source_not_included() {
+    fn paired_spec_python_in_sync() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_minimal_project(root);
         fs::create_dir_all(root.join("py")).unwrap();
         fs::write(root.join("py/m.py"), "x").unwrap();
         fs::write(root.join("py/m.spec.yaml"), "specify_template: default\n").unwrap();
-        assert!(!run_with_root(root, false).unwrap());
+        assert!(run_with_root(root, false).unwrap());
     }
 }

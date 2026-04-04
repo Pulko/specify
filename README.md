@@ -44,7 +44,7 @@ specify init                      # writes .specify/templates/default.yaml and .
 specify generate src/a.ts         # creates src/a.spec.yaml with root specify_template: default
 specify generate src/b.rs --template other   # uses .specify/templates/other.yaml if present
 specify check src/a.ts            # YAML + specify_template + template shape
-specify sync                      # audit existing specs vs built-in include/exclude (see --help)
+specify sync                      # audit specs: paired source same stem, non-.spec.yaml (see --help)
 ```
 
 Run `specify --help` and `specify <command> --help` for embedded documentation.
@@ -67,16 +67,16 @@ Paired spec files are always **`<source_stem>.spec.yaml`** next to the source; t
 
 There is **no** separate required fields list: **`specify check`** compares each spec (minus `specify_template`) to the selected template file. Keys that appear in the template must appear in the spec with a compatible shape. Extra keys in the spec are ignored by `check`.
 
-## `sync` (built-in globs)
+## `sync`
 
-`sync` uses fixed default include/exclude patterns (TypeScript/JavaScript-oriented). It does not read a config file. To support other languages repo-wide, extend the defaults in the Specify source or add a dedicated mechanism later.
+For each `*.spec.yaml`, `sync` looks in the **same directory** for exactly one other file whose name stem matches the spec (excluding other `.spec.yaml` files). That file is the paired source; extension does not matter. The walk skips `node_modules`, `target`, `.git`, and `.specify` so those trees are not scanned.
 
 ## Commands
 
 - **`init`** — Creates/overwrites `templates/default.yaml`, Cursor rule + command stubs, and `.cursor/skills/specify/SKILL.md`.
 - **`generate <file> [--template <name>]`** — Writes `<stem>.spec.yaml` with `specify_template: <name>` plus a copy of `templates/<name>.yaml` if the spec does not exist yet.
 - **`check <file>`** — Spec must exist, parse as YAML, declare `specify_template`, and **match the named template structure**.
-- **`sync`** — For every existing spec file, ensures a unique paired source exists and matches built-in include/exclude. Does **not** create specs.
+- **`sync`** — For every spec file, ensures a **unique** paired source file (same stem, not a spec). Does **not** create specs.
 
 ## Cursor
 
