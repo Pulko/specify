@@ -81,7 +81,3 @@ For each `*.spec.yaml`, `sync` looks in the **same directory** for exactly one o
 ## Cursor
 
 After `specify init`, use the generated rule, commands, and project skill under `.cursor/` (e.g. `/spec-generate`, `/spec-check`, and the **specify** skill for the same authoring workflow). They assume the template-driven workflow above.
-
-## License
-
-Specify your license in `Cargo.toml` and add a `LICENSE` file when you publish.
