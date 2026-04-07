@@ -5,7 +5,7 @@ edition = "2021"
 description = "CLI for YAML spec files beside source code (template-driven check)"
 readme = "README.md"
 # Set to your real URL before publishing; optional for local `cargo install --path`.
-repository = "https://github.com/YOUR_ORG/specify"
+repository = "https://github.com/Pulko/specify"
 
 [dependencies]
 anyhow = "1"

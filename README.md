@@ -2,7 +2,27 @@
 
 CLI for keeping **structured YAML spec files** next to source code so coding agents (and humans) can read intent and behavior without diving into full implementations.
 
-## Install from GitHub
+## Install (prebuilt binary)
+
+Install scripts download the matching asset from [GitHub Releases](https://github.com/Pulko/specify/releases) over **HTTPS**, verify the published **SHA256** sidecar, and place `specify` on your PATH (typically `~/.local/bin` or `~/.cargo/bin` on Unix; `%USERPROFILE%\.local\bin` or `.cargo\bin` on Windows). Pin a version with `SPECIFY_VERSION` (for example `0.1.1` or `v0.1.1`). Override the repo with `SPECIFY_REPO` if you use a fork.
+
+**Linux and macOS** (use a **branch or tag** in the URL once this README is on the default branch—for development, open the script from your clone):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Pulko/specify/main/scripts/install.sh | bash
+```
+
+**Windows (PowerShell)**:
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/Pulko/specify/main/scripts/install.ps1 | iex
+```
+
+If `iex` is blocked by execution policy, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or save the script and run it with `powershell -File install.ps1`.
+
+You can mirror the same files behind a short domain later (similar to `curl | bash` installers that serve from a project site); the download URLs inside the scripts always point at **GitHub Releases** for the binary assets.
+
+## Install from source (Cargo)
 
 You need [Rust](https://rustup.rs/) (Cargo).
 
@@ -12,7 +32,7 @@ You need [Rust](https://rustup.rs/) (Cargo).
 cargo install --git https://github.com/Pulko/specify
 ```
 
-Replace `Pulko/specify` with your real GitHub path. Cargo clones the repo, builds the `specify` binary, and installs it to `~/.cargo/bin` (ensure that directory is on your `PATH`).
+Cargo clones the repo, builds the `specify` binary, and installs it to `~/.cargo/bin` (ensure that directory is on your `PATH`).
 
 **Install from a local clone:**
 
@@ -32,8 +52,8 @@ cargo build --release
 ### Publishing for your team
 
 1. Push this crate to a GitHub repository.
-2. Share the `cargo install --git <url>` command (optionally pin a tag: `cargo install --git <url> --tag v0.1.0`).
-3. Optional: add **GitHub Releases** with prebuilt binaries via a workflow (not included here); many teams rely on `cargo install --git` only.
+2. Share the install script one-liners above, or `cargo install --git <url>` (optionally pin a tag: `cargo install --git <url> --tag v0.1.0`).
+3. Tagged releases `v*` publish prebuilt binaries and `.sha256` checksums via GitHub Actions.
 
 ## Quick start
 

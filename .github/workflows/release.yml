@@ -28,18 +28,37 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             suffix: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            suffix: tar.gz
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Add Rust target (Intel macOS cross-compile)
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: rustup target add x86_64-apple-darwin
+
       - name: Build release binary
-        run: cargo build --release
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
+            cargo build --release --target x86_64-apple-darwin
+          else
+            cargo build --release
+          fi
 
       - name: Strip binary (Unix)
         if: runner.os != 'Windows'
-        run: strip target/release/specify
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
+            strip "target/x86_64-apple-darwin/release/specify"
+          else
+            strip target/release/specify
+          fi
 
       - name: Package archive
         shell: bash
@@ -47,9 +66,13 @@ jobs:
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
           STEM="specify-v${VERSION}-${{ matrix.target }}"
-          mkdir -p "pack/$STEM"
-          BIN="target/release/specify"
+          if [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
+            BIN="target/x86_64-apple-darwin/release/specify"
+          else
+            BIN="target/release/specify"
+          fi
           if [[ "${{ runner.os }}" == "Windows" ]]; then BIN="$BIN.exe"; fi
+          mkdir -p "pack/$STEM"
           cp "$BIN" "pack/$STEM/"
           cd pack
           if [[ "${{ matrix.suffix }}" == "zip" ]]; then
@@ -73,6 +96,17 @@ jobs:
           path: assets
           pattern: binary-*
           merge-multiple: true
+
+      - name: Write SHA256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd assets
+          shopt -s nullglob
+          for f in specify-v*.tar.gz specify-v*.zip; do
+            [ -f "$f" ] || continue
+            sha256sum "$f" > "$f.sha256"
+          done
 
       - uses: softprops/action-gh-release@v2
         with:
