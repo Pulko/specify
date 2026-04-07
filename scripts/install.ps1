@@ -2,17 +2,16 @@
 # Usage: iwr -useb https://raw.githubusercontent.com/Pulko/specify/main/scripts/install.ps1 | iex
 #
 # Environment:
-#   SPECIFY_REPO         GitHub repo root URL (default: https://github.com/Pulko/specify)
-#   SPECIFY_VERSION      Pin version: "0.1.1" or "v0.1.1" (default: latest release)
+#   SPECIFY_VERSION      Optional pin: "0.1.3" or "v0.1.3". If unset, uses the latest GitHub release tag.
 #   SPECIFY_INSTALL_DIR  Directory for specify.exe (default: %USERPROFILE%\.cargo\bin, else %USERPROFILE%\.local\bin)
 
 $OldErrorActionPreference = $ErrorActionPreference
 $ErrorActionPreference = "Stop"
 
-function Install-Specify {
-    $DefaultRepo = "https://github.com/Pulko/specify"
-    $Repo = if ($env:SPECIFY_REPO) { $env:SPECIFY_REPO.TrimEnd("/") } else { $DefaultRepo }
+$RepoSlug = "Pulko/specify"
+$GithubBase = "https://github.com/$RepoSlug"
 
+function Install-Specify {
     if ($env:SPECIFY_VERSION) {
         $v = $env:SPECIFY_VERSION.Trim()
         if ($v.StartsWith("v")) {
@@ -25,14 +24,20 @@ function Install-Specify {
         }
     }
     else {
-        $release = Invoke-RestMethod -Uri "$Repo/releases/latest" -Headers @{ Accept = "application/vnd.github+json" }
+        $apiUrl = "https://api.github.com/repos/$RepoSlug/releases/latest"
+        $headers = @{
+            Accept     = "application/vnd.github+json"
+            User-Agent = "specify-install-script"
+        }
+        $release = Invoke-RestMethod -Uri $apiUrl -Headers $headers
         $Tag = $release.tag_name
         $Ver = $Tag.TrimStart("v")
     }
 
-    $procArch = [System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE", "Process")
+    # Machine scope matches physical CPU (Process scope can differ under WOW64).
+    $procArch = [Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE", "Machine")
     if ($procArch -ne "AMD64") {
-        throw "Unsupported architecture ($procArch). Install Rust and run: cargo install --git ${Repo}.git"
+        throw "Unsupported architecture ($procArch). Install Rust and run: cargo install --git ${GithubBase}.git"
     }
 
     $Triple = "x86_64-pc-windows-msvc"
@@ -72,7 +77,7 @@ function Install-Specify {
     try {
         $zipPath = Join-Path $tmp $Zip
         $hashPath = Join-Path $tmp "$Zip.sha256"
-        $zipUrl = "$Repo/releases/download/$Tag/$Zip"
+        $zipUrl = "$GithubBase/releases/download/$Tag/$Zip"
         Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
         Invoke-WebRequest -Uri "$zipUrl.sha256" -OutFile $hashPath
 

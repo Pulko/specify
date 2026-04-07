@@ -3,15 +3,13 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/Pulko/specify/main/scripts/install.sh | bash
 #
 # Environment:
-#   SPECIFY_REPO         GitHub repo root URL (default: https://github.com/Pulko/specify)
-#   SPECIFY_VERSION      Pin version: "0.1.1" or "v0.1.1" (default: latest release)
+#   SPECIFY_VERSION      Optional pin: "0.1.3" or "v0.1.3". If unset, uses the latest GitHub release tag.
 #   SPECIFY_INSTALL_DIR  Directory for the binary (default: ~/.cargo/bin, else ~/.local/bin)
 
 set -uo pipefail
 
-DEFAULT_REPO="https://github.com/Pulko/specify"
-REPO="${SPECIFY_REPO:-$DEFAULT_REPO}"
-REPO="${REPO%/}"
+REPO_SLUG="Pulko/specify"
+GITHUB_BASE="https://github.com/${REPO_SLUG}"
 
 die() {
   echo "specify install: $*" >&2
@@ -48,7 +46,7 @@ detect_triple() {
       case "$arch" in
         x86_64) TRIPLE="x86_64-unknown-linux-gnu" ;;
         aarch64 | arm64)
-          die "no prebuilt binary for Linux ARM. Try: cargo install --git ${REPO}.git"
+          die "no prebuilt binary for Linux ARM. Try: cargo install --git ${GITHUB_BASE}.git"
           ;;
         *) die "unsupported Linux architecture: $arch" ;;
       esac
@@ -93,9 +91,14 @@ resolve_tag_and_ver() {
     return
   fi
   local json
-  json="$(curl -fsSL -H "Accept: application/vnd.github+json" "${REPO}/releases/latest")" || die "could not fetch latest release from ${REPO}"
+  json="$(
+    curl -fsSL \
+      -H "Accept: application/vnd.github+json" \
+      -H "User-Agent: specify-install-script" \
+      "https://api.github.com/repos/${REPO_SLUG}/releases/latest"
+  )" || die "could not fetch latest release for ${REPO_SLUG}"
   TAG="$(printf '%s' "$json" | sed -n 's/.*"tag_name":"\([^"]*\)".*/\1/p' | head -n1)"
-  [[ -n "$TAG" ]] || die "could not parse tag_name from GitHub response"
+  [[ -n "$TAG" ]] || die "could not parse tag_name from GitHub API response"
   VER="${TAG#v}"
 }
 
@@ -108,7 +111,7 @@ resolve_tag_and_ver
 
 STEM="specify-v${VER}-${TRIPLE}"
 ASSET="${STEM}.tar.gz"
-URL="${REPO}/releases/download/${TAG}/${ASSET}"
+URL="${GITHUB_BASE}/releases/download/${TAG}/${ASSET}"
 
 if command -v specify >/dev/null 2>&1; then
   current="$(specify -V 2>/dev/null | awk '{print $2}')"

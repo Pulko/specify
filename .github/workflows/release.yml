@@ -15,6 +15,9 @@ jobs:
   build:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -22,7 +25,8 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             suffix: tar.gz
-          - os: windows-latest
+          # Pinned label matches hosted Windows Server 2025 (MSVC); see windows/Windows2025-Readme.md in actions/runner-images
+          - os: windows-2025
             target: x86_64-pc-windows-msvc
             suffix: zip
           - os: macos-latest
@@ -61,7 +65,6 @@ jobs:
           fi
 
       - name: Package archive
-        shell: bash
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
