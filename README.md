@@ -4,7 +4,7 @@ CLI for keeping **structured YAML spec files** next to source code so coding age
 
 ## Install (prebuilt binary)
 
-Install scripts download the matching asset from [GitHub Releases](https://github.com/Pulko/specify/releases) over **HTTPS**, verify the published **SHA256** sidecar, and place `specify` on your PATH (typically `~/.local/bin` or `~/.cargo/bin` on Unix; `%USERPROFILE%\.local\bin` or `.cargo\bin` on Windows). Pin a version with `SPECIFY_VERSION` (for example `0.1.1` or `v0.1.1`). Override the repo with `SPECIFY_REPO` if you use a fork.
+Install scripts download the matching asset from [GitHub Releases](https://github.com/Pulko/specify/releases) over **HTTPS**, verify the published **SHA256** sidecar, and place `specify` on your PATH (typically `~/.local/bin` or `~/.cargo/bin` on Unix; `%USERPROFILE%\.local\bin` or `.cargo\bin` on Windows). Pin a version with `SPECIFY_VERSION` (for example `0.1.3` or `v0.1.3`). Override the repo with `SPECIFY_REPO` if you use a fork.
 
 **Linux and macOS** (use a **branch or tag** in the URL once this README is on the default branch—for development, open the script from your clone):
 
