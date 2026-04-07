@@ -4,9 +4,11 @@ CLI for keeping **structured YAML spec files** next to source code so coding age
 
 ## Install (prebuilt binary)
 
-Install scripts download the matching asset from [GitHub Releases](https://github.com/Pulko/specify/releases) over **HTTPS**, verify the published **SHA256** sidecar, and place `specify` on your PATH (typically `~/.local/bin` or `~/.cargo/bin` on Unix; `%USERPROFILE%\.local\bin` or `.cargo\bin` on Windows). They always use the **`Pulko/specify`** repo; by default they install the **latest** release. Set **`SPECIFY_VERSION`** (for example `0.1.4` or `v0.1.4`) to pin a tag. Optional **`SPECIFY_INSTALL_DIR`** chooses the install folder.
+The install scripts pull the **latest** [GitHub release](https://github.com/Pulko/specify/releases) for your system, check the download, and put **`specify`** somewhere you can run it from the terminal. If the command is not found right away, **open a new terminal** (on Mac/Linux the script may add one line to your shell config; Windows updates your user **PATH**).
 
-**Linux and macOS** (use a **branch or tag** in the URL once this README is on the default branch—for development, open the script from your clone):
+**Optional:** set `SPECIFY_VERSION` before running the script to pin a version (for example `0.1.4` or `v0.1.4`), or `SPECIFY_INSTALL_DIR` to choose the install folder. Other knobs are documented in the script headers.
+
+**Linux and macOS:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Pulko/specify/main/scripts/install.sh | bash
@@ -20,7 +22,7 @@ iwr -useb https://raw.githubusercontent.com/Pulko/specify/main/scripts/install.p
 
 If `iex` is blocked by execution policy, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or save the script and run it with `powershell -File install.ps1`.
 
-You can mirror the same files behind a short domain later (similar to `curl | bash` installers that serve from a project site); the download URLs inside the scripts always point at **GitHub Releases** for the binary assets.
+You can host the same scripts on your own domain later; they still download binaries from GitHub Releases.
 
 ## Install from source (Cargo)
 

@@ -3,8 +3,9 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/Pulko/specify/main/scripts/install.sh | bash
 #
 # Environment:
-#   SPECIFY_VERSION      Optional pin: "0.1.3" or "v0.1.3". If unset, uses the latest GitHub release tag.
-#   SPECIFY_INSTALL_DIR  Directory for the binary (default: ~/.cargo/bin, else ~/.local/bin)
+#   SPECIFY_VERSION              Optional pin: "0.1.3" or "v0.1.3". If unset, uses the latest GitHub release tag.
+#   SPECIFY_INSTALL_DIR          Directory for the binary (default: ~/.cargo/bin, else ~/.local/bin)
+#   SPECIFY_INSTALL_SKIP_SHELL_RC  Set to 1 to skip editing ~/.zshrc / ~/.bashrc (PATH hint only).
 
 set -uo pipefail
 
@@ -76,6 +77,49 @@ resolve_install_dir() {
     return
   fi
   echo "${HOME}/.local/bin"
+}
+
+# curl|bash runs in a subshell — cannot export PATH into your interactive zsh/bash. Append one
+# idempotent block to the login shell rc file (skipped in CI or when SPECIFY_INSTALL_SKIP_SHELL_RC=1).
+append_path_to_login_shell_rc() {
+  local rc=""
+  case "${SHELL:-}" in
+    */fish | fish)
+      echo "fish: add once to config: fish_add_path ${INSTALL_DIR}"
+      echo "   or: set -gx PATH ${INSTALL_DIR} \$PATH"
+      return 0
+      ;;
+    */zsh | zsh)
+      rc="${HOME}/.zshrc"
+      ;;
+    */bash | bash)
+      rc="${HOME}/.bashrc"
+      ;;
+    *)
+      rc="${HOME}/.profile"
+      ;;
+  esac
+
+  if [[ "${SPECIFY_INSTALL_SKIP_SHELL_RC:-}" == "1" ]] || [[ "${CI:-}" == "true" ]] || [[ "${CI:-}" == "1" ]]; then
+    echo "Add ${INSTALL_DIR} to PATH, for example:"
+    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+    return 0
+  fi
+
+  touch "$rc" || die "could not create or touch $rc"
+
+  if grep -qF '# specify install.sh: PATH' "$rc" 2>/dev/null; then
+    echo "Found existing specify PATH block in ${rc} — ensure it includes ${INSTALL_DIR}"
+  else
+    {
+      echo ""
+      echo "# specify install.sh: PATH"
+      printf 'export PATH="%s:$PATH"\n' "$INSTALL_DIR"
+    } >>"$rc" || die "could not append to $rc"
+    echo "Appended ${INSTALL_DIR} to PATH in ${rc}"
+  fi
+  echo "Reload: source ${rc}   (or open a new terminal)"
+  echo "This shell only: export PATH=\"${INSTALL_DIR}:\$PATH\""
 }
 
 resolve_tag_and_ver() {
@@ -153,8 +197,5 @@ echo "Installed specify ${TAG} to ${INSTALL_DIR}/specify"
 
 case ":${PATH}:" in
   *":${INSTALL_DIR}:"*) ;;
-  *)
-    echo "Add ${INSTALL_DIR} to PATH, for example:"
-    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
-    ;;
+  *) append_path_to_login_shell_rc ;;
 esac
